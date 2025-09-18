@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { CoinsIcon, TrendingUpIcon, UserIcon } from "lucide-react";
+import { CoinsIcon, TrendingUpIcon, UserIcon, PlusIcon } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import coinIcon from "@/assets/coin-icon.png";
 
 interface HeaderProps {
@@ -7,6 +8,7 @@ interface HeaderProps {
 }
 
 export default function Header({ virtualCoins }: HeaderProps) {
+  const navigate = useNavigate();
   return (
     <header className="w-full bg-card shadow-card rounded-2xl p-6 mb-8">
       <div className="flex items-center justify-between">
@@ -28,6 +30,15 @@ export default function Header({ virtualCoins }: HeaderProps) {
             <span className="text-2xl font-bold text-accent">{virtualCoins.toLocaleString()}</span>
             <span className="text-muted-foreground font-medium">Virtual Coins</span>
           </div>
+          
+          <Button 
+            variant="outline" 
+            onClick={() => navigate('/buy-coins')}
+            className="flex items-center gap-2"
+          >
+            <PlusIcon className="w-4 h-4" />
+            Buy Coins
+          </Button>
           
           <Button variant="outline" size="icon" className="rounded-full">
             <UserIcon className="w-5 h-5" />
