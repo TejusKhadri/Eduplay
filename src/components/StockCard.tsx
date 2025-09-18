@@ -22,7 +22,9 @@ interface StockCardProps {
 
 export default function StockCard({ stock, onBuy, userCoins }: StockCardProps) {
   const isPositive = stock.change >= 0;
-  const canAfford = userCoins >= stock.price;
+  // Convert dollar price to coin cost (simplified 1:1 ratio)
+  const coinCost = Math.round(stock.price);
+  const canAfford = userCoins >= coinCost;
   
   return (
     <Card className="shadow-card hover:shadow-glow transition-all duration-300 hover:scale-105">
@@ -41,11 +43,17 @@ export default function StockCard({ stock, onBuy, userCoins }: StockCardProps) {
       
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="text-2xl font-bold">{stock.price} coins</div>
+          <div>
+            <div className="text-2xl font-bold">${stock.price}</div>
+            <div className="text-sm text-muted-foreground">Cost: {coinCost} coins</div>
+          </div>
           <div className={`flex items-center gap-1 ${isPositive ? 'text-success' : 'text-destructive'}`}>
             {isPositive ? <TrendingUpIcon className="w-4 h-4" /> : <TrendingDownIcon className="w-4 h-4" />}
             <span className="font-semibold">
-              {isPositive ? '+' : ''}{stock.changePercent.toFixed(1)}%
+              {isPositive ? '+' : ''}${stock.change.toFixed(2)}
+            </span>
+            <span className="text-xs">
+              ({isPositive ? '+' : ''}{stock.changePercent.toFixed(1)}%)
             </span>
           </div>
         </div>
@@ -55,11 +63,11 @@ export default function StockCard({ stock, onBuy, userCoins }: StockCardProps) {
         <Button 
           variant={canAfford ? "coin" : "outline"} 
           className="w-full"
-          onClick={() => onBuy(stock)}
+          onClick={() => onBuy({ ...stock, price: coinCost })}
           disabled={!canAfford}
         >
           <ShoppingCartIcon className="w-4 h-4" />
-          {canAfford ? 'Buy Stock' : 'Not Enough Coins'}
+          {canAfford ? `Buy for ${coinCost} coins` : 'Not Enough Coins'}
         </Button>
       </CardContent>
     </Card>
