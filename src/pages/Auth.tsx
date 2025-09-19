@@ -224,7 +224,7 @@ export default function Auth() {
             <Button variant="outline" onClick={handleQuickCreate} disabled={loading} className="w-full">
               Create my account instantly (no email needed)
             </Button>
-            <p className="text-xs text-muted-foreground">We'll use your inputs, or this default: Email: tejuskhadri@gmail.com, Password: EduPlay!123</p>
+            <p className="text-xs text-muted-foreground">We'll use your inputs, or default credentials if empty</p>
           </div>
         </CardContent>
       </Card>
