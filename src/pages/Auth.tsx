@@ -100,6 +100,41 @@ export default function Auth() {
     }
   };
 
+  const handleQuickCreate = async () => {
+    setLoading(true);
+    try {
+      const emailToCreate = email || 'tejuskhadri@gmail.com';
+      const passwordToUse = password || 'EduPlay!123';
+      const display = displayName || 'Tejas';
+
+      const { data, error }: any = await supabase.functions.invoke('create-user', {
+        body: { email: emailToCreate, password: passwordToUse, display_name: display },
+      });
+
+      if (error) {
+        throw new Error(typeof error === 'string' ? error : error.message || 'Failed to create user');
+      }
+
+      toast({
+        title: 'Account created',
+        description: `Use ${emailToCreate} / ${passwordToUse} to sign in.`,
+      });
+
+      // Auto sign-in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: emailToCreate,
+        password: passwordToUse,
+      });
+      if (signInError) {
+        toast({ title: 'Sign in failed', description: signInError.message, variant: 'destructive' });
+      }
+    } catch (e: any) {
+      toast({ title: 'Could not create account', description: e.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -183,6 +218,14 @@ export default function Auth() {
               </form>
             </TabsContent>
           </Tabs>
+
+          <div className="mt-6 space-y-3 text-center">
+            <p className="text-sm text-muted-foreground">Not receiving the confirmation email?</p>
+            <Button variant="outline" onClick={handleQuickCreate} disabled={loading} className="w-full">
+              Create my account instantly (no email needed)
+            </Button>
+            <p className="text-xs text-muted-foreground">We'll use your inputs, or this default: Email: tejuskhadri@gmail.com, Password: EduPlay!123</p>
+          </div>
         </CardContent>
       </Card>
     </div>
