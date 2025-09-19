@@ -34,23 +34,69 @@ serve(async (req) => {
       });
     }
 
-    // Create the user as confirmed
-    const { data, error } = await supabase.auth.admin.createUser({
-      email,
+    const normalizedEmail = String(email).trim().toLowerCase();
+
+    // Try creating the user as confirmed
+    const createRes = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
       password,
       email_confirm: true,
       user_metadata: { display_name: display_name || null },
     });
 
-    if (error) {
-      console.error("create-user error:", error);
-      return new Response(JSON.stringify({ error: error.message }), {
+    if (createRes.error) {
+      // If the user already exists, update password and mark confirmed
+      if ((createRes.error as any).code === 'email_exists') {
+        // Find user by email via pagination
+        let foundUser: any = null;
+        let page = 1;
+        const perPage = 1000;
+        while (!foundUser) {
+          const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+          if (error) break;
+          const users = data?.users || [];
+          foundUser = users.find((u: any) => (u.email || '').toLowerCase() === normalizedEmail);
+          if (!foundUser) {
+            if (users.length < perPage) break; // no more pages
+            page += 1;
+          }
+        }
+
+        if (!foundUser) {
+          return new Response(JSON.stringify({ error: "User exists but could not be retrieved" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+          });
+        }
+
+        const updateRes = await supabase.auth.admin.updateUserById(foundUser.id, {
+          password,
+          email_confirm: true,
+          user_metadata: { display_name: display_name || foundUser.user_metadata?.display_name || null },
+        });
+
+        if (updateRes.error) {
+          console.error("create-user update error:", updateRes.error);
+          return new Response(JSON.stringify({ error: updateRes.error.message }), {
+            status: 400,
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+          });
+        }
+
+        return new Response(JSON.stringify({ user: updateRes.data.user, action: 'updated' }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+
+      console.error("create-user create error:", createRes.error);
+      return new Response(JSON.stringify({ error: createRes.error.message }), {
         status: 400,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
-    return new Response(JSON.stringify({ user: data.user }), {
+    return new Response(JSON.stringify({ user: createRes.data.user, action: 'created' }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
