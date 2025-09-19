@@ -1,9 +1,12 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { TrophyIcon, TrendingUpIcon, TrendingDownIcon, UsersIcon, StarIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface LeaderboardUser {
   id: string;
@@ -22,100 +25,17 @@ interface LeaderboardProps {
   userGroup?: string;
 }
 
-// Mock leaderboard data - this will be replaced with real data from Supabase
-const mockGlobalLeaders: LeaderboardUser[] = [
-  {
-    id: "1",
-    name: "Alex Chen",
-    portfolioValue: 15420,
-    totalReturn: 5420,
-    returnPercentage: 54.2,
-    rank: 1,
-    group: "Investing Pros",
-    activeStocks: 8,
-    weeklyReturn: 12.5
-  },
-  {
-    id: "2", 
-    name: "Sarah Johnson",
-    portfolioValue: 14230,
-    totalReturn: 4230,
-    returnPercentage: 42.3,
-    rank: 2,
-    group: "Tech Investors",
-    activeStocks: 6,
-    weeklyReturn: 8.7
-  },
-  {
-    id: "3",
-    name: "Mike Davis",
-    portfolioValue: 13850,
-    totalReturn: 3850,
-    returnPercentage: 38.5,
-    rank: 3,
-    group: "Investing Pros",
-    activeStocks: 12,
-    weeklyReturn: 15.2
-  },
-  {
-    id: "4",
-    name: "Emma Wilson",
-    portfolioValue: 12900,
-    totalReturn: 2900,
-    returnPercentage: 29.0,
-    rank: 4,
-    group: "Beginners Club",
-    activeStocks: 4,
-    weeklyReturn: 6.8
-  },
-  {
-    id: "5",
-    name: "You",
-    portfolioValue: 1000,
-    totalReturn: 0,
-    returnPercentage: 0,
-    rank: 847,
-    group: "Beginners Club",
-    activeStocks: 0,
-    weeklyReturn: 0
-  }
-];
-
-const mockGroupLeaders: LeaderboardUser[] = [
-  {
-    id: "4",
-    name: "Emma Wilson", 
-    portfolioValue: 12900,
-    totalReturn: 2900,
-    returnPercentage: 29.0,
-    rank: 1,
-    group: "Beginners Club",
-    activeStocks: 4,
-    weeklyReturn: 6.8
-  },
-  {
-    id: "6",
-    name: "James Brown",
-    portfolioValue: 8500,
-    totalReturn: 1500,
-    returnPercentage: 17.6,
-    rank: 2,
-    group: "Beginners Club", 
-    activeStocks: 3,
-    weeklyReturn: 4.2
-  },
-  {
-    id: "5",
-    name: "You",
-    portfolioValue: 1000,
-    totalReturn: 0,
-    returnPercentage: 0,
-    rank: 3,
-    group: "Beginners Club",
-    activeStocks: 0,
-    weeklyReturn: 0
-  }
-];
+interface LeaderboardData {
+  globalLeaders: LeaderboardUser[];
+  groupLeaders: LeaderboardUser[];
+  userRank: number;
+  userGroupRank: number;
+  userStats: {
+    portfolioValue: number;
+    returnPercentage: number;
+    weeklyReturn: number;
+  };
+}
 
 const LeaderboardCard = ({ user, isCurrentUser = false }: { user: LeaderboardUser; isCurrentUser?: boolean }) => {
   const getRankIcon = (rank: number) => {
@@ -181,6 +101,132 @@ const LeaderboardCard = ({ user, isCurrentUser = false }: { user: LeaderboardUse
 };
 
 export default function Leaderboard({ userGroup = "Beginners Club" }: LeaderboardProps) {
+  const { user } = useAuth();
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardData>({
+    globalLeaders: [],
+    groupLeaders: [],
+    userRank: 0,
+    userGroupRank: 0,
+    userStats: {
+      portfolioValue: 0,
+      returnPercentage: 0,
+      weeklyReturn: 0,
+    },
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      fetchLeaderboardData();
+    }
+  }, [user]);
+
+  const fetchLeaderboardData = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      
+      // Fetch all profiles
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('virtual_coins', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching leaderboard data:', error);
+        return;
+      }
+
+      // Calculate leaderboard users with portfolio data
+      const leaderboardUsers: LeaderboardUser[] = await Promise.all(
+        (profiles || []).map(async (profile, index) => {
+          // Fetch user's portfolio
+          const { data: portfolio } = await supabase
+            .from('portfolios')
+            .select('*')
+            .eq('user_id', profile.user_id);
+
+          const portfolioValue = (portfolio || []).reduce(
+            (sum, stock) => sum + (stock.shares * stock.current_price), 
+            0
+          );
+
+          const portfolioCost = (portfolio || []).reduce(
+            (sum, stock) => sum + (stock.shares * stock.buy_price), 
+            0
+          );
+
+          const totalValue = portfolioValue + profile.virtual_coins;
+          const totalCost = portfolioCost + 10000; // Starting amount
+          const returnPercentage = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
+
+          return {
+            id: profile.id,
+            name: profile.display_name || 'Anonymous',
+            avatar: profile.avatar_url || '',
+            portfolioValue: totalValue,
+            totalReturn: totalValue - totalCost,
+            returnPercentage,
+            rank: index + 1,
+            group: profile.user_group || 'General',
+            activeStocks: portfolio?.length || 0,
+            weeklyReturn: 0, // Would need historical data
+          };
+        })
+      );
+
+      // Sort by total value
+      const sortedUsers = leaderboardUsers.sort((a, b) => b.portfolioValue - a.portfolioValue);
+      
+      // Update ranks
+      const globalLeaders = sortedUsers.map((user, index) => ({
+        ...user,
+        rank: index + 1,
+      }));
+
+      // Filter group leaders
+      const groupLeaders = globalLeaders
+        .filter(user => user.group === userGroup)
+        .map((user, index) => ({
+          ...user,
+          rank: index + 1,
+        }));
+
+      // Find current user's data
+      const currentUser = globalLeaders.find(u => u.id === user.id);
+      const userRank = currentUser?.rank || 0;
+      const userGroupRank = groupLeaders.find(u => u.id === user.id)?.rank || 0;
+
+      setLeaderboardData({
+        globalLeaders: globalLeaders.slice(0, 10),
+        groupLeaders: groupLeaders.slice(0, 10),
+        userRank,
+        userGroupRank,
+        userStats: {
+          portfolioValue: currentUser?.portfolioValue || 0,
+          returnPercentage: currentUser?.returnPercentage || 0,
+          weeklyReturn: currentUser?.weeklyReturn || 0,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-muted-foreground">Loading leaderboard...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -192,8 +238,12 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">#847</div>
-            <p className="text-primary-foreground/80 text-sm">Out of 1,234 players</p>
+            <div className="text-3xl font-bold">
+              {leaderboardData.userRank > 0 ? `#${leaderboardData.userRank}` : 'Unranked'}
+            </div>
+            <p className="text-primary-foreground/80 text-sm">
+              Out of {leaderboardData.globalLeaders.length} players
+            </p>
           </CardContent>
         </Card>
         
@@ -205,7 +255,9 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-accent">#3</div>
+            <div className="text-3xl font-bold text-accent">
+              {leaderboardData.userGroupRank > 0 ? `#${leaderboardData.userGroupRank}` : 'Unranked'}
+            </div>
             <p className="text-muted-foreground text-sm">In {userGroup}</p>
           </CardContent>
         </Card>
@@ -214,12 +266,17 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
           <CardHeader className="pb-3">
             <CardTitle className="text-lg flex items-center gap-2">
               <StarIcon className="w-5 h-5" />
-              Weekly Performance
+              Portfolio Value
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">0.0%</div>
-            <p className="text-muted-foreground text-sm">This week</p>
+            <div className="text-3xl font-bold">
+              {leaderboardData.userStats.portfolioValue.toFixed(0)} coins
+            </div>
+            <p className="text-muted-foreground text-sm">
+              {leaderboardData.userStats.returnPercentage >= 0 ? '+' : ''}
+              {leaderboardData.userStats.returnPercentage.toFixed(1)}% return
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -239,13 +296,20 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
           </div>
           
           <div className="space-y-3">
-            {mockGlobalLeaders.map((user) => (
-              <LeaderboardCard 
-                key={user.id} 
-                user={user} 
-                isCurrentUser={user.name === "You"} 
-              />
-            ))}
+            {leaderboardData.globalLeaders.length > 0 ? (
+              leaderboardData.globalLeaders.map((leader) => (
+                <LeaderboardCard 
+                  key={leader.id} 
+                  user={leader} 
+                  isCurrentUser={leader.id === user?.id} 
+                />
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No rankings available yet!</p>
+                <p className="text-sm">Start investing to see the leaderboard.</p>
+              </div>
+            )}
           </div>
           
           <div className="text-center py-6">
@@ -262,19 +326,26 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="text-xs">
                 <UsersIcon className="w-3 h-3 mr-1" />
-                12 members
+                {leaderboardData.groupLeaders.length} members
               </Badge>
             </div>
           </div>
           
           <div className="space-y-3">
-            {mockGroupLeaders.map((user) => (
-              <LeaderboardCard 
-                key={user.id} 
-                user={user} 
-                isCurrentUser={user.name === "You"} 
-              />
-            ))}
+            {leaderboardData.groupLeaders.length > 0 ? (
+              leaderboardData.groupLeaders.map((leader) => (
+                <LeaderboardCard 
+                  key={leader.id} 
+                  user={leader} 
+                  isCurrentUser={leader.id === user?.id} 
+                />
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No group rankings available yet!</p>
+                <p className="text-sm">Join a group to compete with peers.</p>
+              </div>
+            )}
           </div>
           
           <Card className="bg-muted/50">

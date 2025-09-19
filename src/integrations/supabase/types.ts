@@ -14,7 +14,147 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      learning_progress: {
+        Row: {
+          coins_earned: number
+          completed_at: string
+          id: string
+          module_id: string
+          module_title: string
+          user_id: string
+        }
+        Insert: {
+          coins_earned?: number
+          completed_at?: string
+          id?: string
+          module_id: string
+          module_title: string
+          user_id: string
+        }
+        Update: {
+          coins_earned?: number
+          completed_at?: string
+          id?: string
+          module_id?: string
+          module_title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      portfolios: {
+        Row: {
+          buy_price: number
+          category: string | null
+          created_at: string
+          current_price: number
+          id: string
+          shares: number
+          stock_name: string
+          stock_symbol: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          buy_price: number
+          category?: string | null
+          created_at?: string
+          current_price: number
+          id?: string
+          shares: number
+          stock_name: string
+          stock_symbol: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          buy_price?: number
+          category?: string | null
+          created_at?: string
+          current_price?: number
+          id?: string
+          shares?: number
+          stock_name?: string
+          stock_symbol?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          total_portfolio_value: number | null
+          total_returns: number | null
+          updated_at: string
+          user_group: string | null
+          user_id: string
+          virtual_coins: number
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          total_portfolio_value?: number | null
+          total_returns?: number | null
+          updated_at?: string
+          user_group?: string | null
+          user_id: string
+          virtual_coins?: number
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          total_portfolio_value?: number | null
+          total_returns?: number | null
+          updated_at?: string
+          user_group?: string | null
+          user_id?: string
+          virtual_coins?: number
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          created_at: string
+          id: string
+          price: number
+          shares: number
+          stock_name: string
+          stock_symbol: string
+          total_amount: number
+          transaction_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          price: number
+          shares: number
+          stock_name: string
+          stock_symbol: string
+          total_amount: number
+          transaction_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          price?: number
+          shares?: number
+          stock_name?: string
+          stock_symbol?: string
+          total_amount?: number
+          transaction_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

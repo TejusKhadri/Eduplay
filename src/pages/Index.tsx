@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import Header from "@/components/Header";
@@ -8,6 +9,10 @@ import LearningCenter from "@/components/LearningCenter";
 import Leaderboard from "@/components/Leaderboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { yahooFinanceService, type Stock } from "@/services/yahooFinanceService";
+import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
+import { usePortfolio } from "@/hooks/usePortfolio";
+import { useLearning } from "@/hooks/useLearning";
 
 // Fallback mock data for when API fails
 const fallbackStocks: Stock[] = [
@@ -133,12 +138,21 @@ const learningModules = [
 ];
 
 const Index = () => {
-  const [virtualCoins, setVirtualCoins] = useState(1000);
-  const [portfolio, setPortfolio] = useState<any[]>([]);
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const { profile, updateProfile } = useProfile();
+  const { portfolio, buyStock, updateStockPrices } = usePortfolio();
+  const { modules, completeModule } = useLearning();
   const [stocks, setStocks] = useState<Stock[]>(fallbackStocks);
-  const [modules, setModules] = useState(learningModules);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
 
   // Fetch real stock data on component mount
   useEffect(() => {
@@ -150,6 +164,14 @@ const Index = () => {
         
         if (realStocks.length > 0) {
           setStocks(realStocks);
+          
+          // Update portfolio stock prices
+          const stockPrices = realStocks.map(stock => ({
+            symbol: stock.symbol,
+            price: stock.price
+          }));
+          updateStockPrices(stockPrices);
+          
           toast({
             title: "Live Market Data Loaded! 📈",
             description: "Now showing real stock prices from Yahoo Finance!",
@@ -177,66 +199,81 @@ const Index = () => {
     return () => clearInterval(interval);
   }, [toast]);
 
-  const handleBuyStock = (stock: Stock) => {
-    if (virtualCoins >= stock.price) {
-      setVirtualCoins(prev => prev - stock.price);
-      
-      setPortfolio(prev => {
-        const existingStock = prev.find(item => item.symbol === stock.symbol);
-        if (existingStock) {
-          return prev.map(item =>
-            item.symbol === stock.symbol
-              ? { 
-                  ...item, 
-                  shares: item.shares + 1,
-                  currentPrice: stock.price 
-                }
-              : item
-          );
-        } else {
-          return [...prev, {
-            id: stock.id,
-            symbol: stock.symbol,
-            name: stock.name,
-            shares: 1,
-            buyPrice: stock.price,
-            currentPrice: stock.price,
-            category: stock.category
-          }];
-        }
-      });
+  const handleBuyStock = async (stock: Stock) => {
+    if (!profile) return;
 
-      toast({
-        title: "Stock Purchased! 🎉",
-        description: `You bought 1 share of ${stock.symbol} for ${stock.price} coins!`,
-      });
+    const currentCoins = profile.virtual_coins;
+    
+    if (currentCoins >= stock.price) {
+      const success = await buyStock(stock.symbol, stock.name, stock.price, stock.category || 'Technology');
+      
+      if (success) {
+        // Update user's coin balance
+        await updateProfile({ virtual_coins: currentCoins - stock.price });
+        
+        toast({
+          title: "Stock Purchased! 🎉",
+          description: `You bought 1 share of ${stock.symbol} for ${stock.price} coins!`,
+        });
+      } else {
+        toast({
+          title: "Purchase Failed",
+          description: "There was an error processing your purchase.",
+          variant: "destructive",
+        });
+      }
     } else {
       toast({
         title: "Not Enough Coins! 💰",
-        description: `You need ${stock.price - virtualCoins} more coins to buy this stock.`,
+        description: `You need ${stock.price - currentCoins} more coins to buy this stock.`,
         variant: "destructive",
       });
     }
   };
 
-  const handleStartModule = (moduleId: string) => {
+  const handleStartModule = async (moduleId: string) => {
+    if (!profile) return;
+
     const module = modules.find(m => m.id === moduleId);
     if (module && !module.completed) {
-      setVirtualCoins(prev => prev + module.reward);
-      setModules(prev => prev.map(m => 
-        m.id === moduleId ? { ...m, completed: true } : m
-      ));
+      const success = await completeModule(moduleId);
       
-      toast({
-        title: "Lesson Completed! 🌟",
-        description: `You earned ${module.reward} virtual coins!`,
-      });
+      if (success) {
+        // Update user's coin balance
+        await updateProfile({ virtual_coins: profile.virtual_coins + module.reward });
+        
+        toast({
+          title: "Lesson Completed! 🌟",
+          description: `You earned ${module.reward} virtual coins!`,
+        });
+      } else {
+        toast({
+          title: "Module Completion Failed",
+          description: "There was an error completing the module.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // Will redirect to auth
+  }
+
   return (
     <div className="min-h-screen p-4 max-w-7xl mx-auto">
-      <Header virtualCoins={virtualCoins} />
+      <Header />
       
       <Tabs defaultValue="market" className="space-y-6">
         <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
@@ -277,7 +314,7 @@ const Index = () => {
                     key={stock.id}
                     stock={stock}
                     onBuy={handleBuyStock}
-                    userCoins={virtualCoins}
+                    userCoins={profile?.virtual_coins || 0}
                   />
                 ))}
               </div>

@@ -2,23 +2,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUpIcon, TrendingDownIcon, PieChartIcon } from "lucide-react";
 
-interface PortfolioStock {
-  id: string;
-  symbol: string;
-  name: string;
-  shares: number;
-  buyPrice: number;
-  currentPrice: number;
-  category: string;
-}
+import { PortfolioStock } from "@/hooks/usePortfolio";
 
 interface PortfolioProps {
   stocks: PortfolioStock[];
 }
 
 export default function Portfolio({ stocks }: PortfolioProps) {
-  const totalValue = stocks.reduce((sum, stock) => sum + (stock.shares * stock.currentPrice), 0);
-  const totalCost = stocks.reduce((sum, stock) => sum + (stock.shares * stock.buyPrice), 0);
+  const totalValue = stocks.reduce((sum, stock) => sum + (stock.shares * stock.current_price), 0);
+  const totalCost = stocks.reduce((sum, stock) => sum + (stock.shares * stock.buy_price), 0);
   const totalGainLoss = totalValue - totalCost;
   const totalGainLossPercent = totalCost > 0 ? (totalGainLoss / totalCost) * 100 : 0;
   
@@ -56,22 +48,22 @@ export default function Portfolio({ stocks }: PortfolioProps) {
         ) : (
           <div className="space-y-3">
             {stocks.map((stock) => {
-              const gainLoss = stock.shares * (stock.currentPrice - stock.buyPrice);
-              const gainLossPercent = ((stock.currentPrice - stock.buyPrice) / stock.buyPrice) * 100;
+              const gainLoss = stock.shares * (stock.current_price - stock.buy_price);
+              const gainLossPercent = ((stock.current_price - stock.buy_price) / stock.buy_price) * 100;
               const isPositive = gainLoss >= 0;
               
               return (
                 <div key={stock.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">{stock.symbol}</span>
-                      <Badge variant="outline" className="text-xs">{stock.category}</Badge>
+                      <span className="font-semibold">{stock.stock_symbol}</span>
+                      <Badge variant="outline" className="text-xs">{stock.category || 'Unknown'}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{stock.shares} shares</p>
                   </div>
                   
                   <div className="text-right">
-                    <p className="font-semibold">{(stock.shares * stock.currentPrice).toFixed(0)} coins</p>
+                    <p className="font-semibold">{(stock.shares * stock.current_price).toFixed(0)} coins</p>
                     <div className={`flex items-center gap-1 text-sm ${isPositive ? 'text-success' : 'text-destructive'}`}>
                       {isPositive ? <TrendingUpIcon className="w-3 h-3" /> : <TrendingDownIcon className="w-3 h-3" />}
                       <span>{isPositive ? '+' : ''}{gainLossPercent.toFixed(1)}%</span>
