@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { CoinsIcon, TrendingUpIcon, UserIcon, PlusIcon, LogOutIcon } from "lucide-react";
+import { CoinsIcon, TrendingUpIcon, UserIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import coinIcon from "@/assets/coin-icon.png";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,10 +16,6 @@ export default function Header({ virtualCoins }: HeaderProps) {
 
   const displayCoins = virtualCoins ?? profile?.virtual_coins ?? 0;
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/auth');
-  };
 
   if (!user) {
     return (
@@ -75,8 +71,8 @@ export default function Header({ virtualCoins }: HeaderProps) {
             Buy Coins
           </Button>
           
-          <Button variant="outline" size="icon" className="rounded-full" onClick={handleSignOut}>
-            <LogOutIcon className="w-5 h-5" />
+          <Button variant="outline" size="icon" className="rounded-full" onClick={() => navigate('/settings')}>
+            <SettingsIcon className="w-5 h-5" />
           </Button>
         </div>
       </div>
