@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { TrophyIcon, TrendingUpIcon, TrendingDownIcon, UsersIcon, StarIcon } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,16 +9,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
 interface LeaderboardUser {
-  id: string;
   name: string;
-  avatar?: string;
   portfolioValue: number;
-  totalReturn: number;
   returnPercentage: number;
   rank: number;
   group?: string;
-  activeStocks: number;
-  weeklyReturn: number;
 }
 
 interface LeaderboardProps {
@@ -33,7 +28,7 @@ interface LeaderboardData {
   userStats: {
     portfolioValue: number;
     returnPercentage: number;
-    weeklyReturn: number;
+    displayName: string;
   };
 }
 
@@ -46,7 +41,7 @@ const LeaderboardCard = ({ user, isCurrentUser = false }: { user: LeaderboardUse
   };
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
   return (
@@ -59,7 +54,6 @@ const LeaderboardCard = ({ user, isCurrentUser = false }: { user: LeaderboardUse
             </div>
             
             <Avatar className="w-10 h-10">
-              <AvatarImage src={user.avatar} />
               <AvatarFallback className="bg-gradient-primary text-primary-foreground">
                 {getInitials(user.name)}
               </AvatarFallback>
@@ -90,9 +84,6 @@ const LeaderboardCard = ({ user, isCurrentUser = false }: { user: LeaderboardUse
               }
               {user.returnPercentage >= 0 ? '+' : ''}{user.returnPercentage.toFixed(1)}%
             </div>
-            <div className="text-xs text-muted-foreground">
-              {user.activeStocks} stocks
-            </div>
           </div>
         </div>
       </CardContent>
@@ -110,10 +101,11 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
     userStats: {
       portfolioValue: 0,
       returnPercentage: 0,
-      weeklyReturn: 0,
+      displayName: '',
     },
   });
   const [loading, setLoading] = useState(true);
+  const [totalPlayers, setTotalPlayers] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -127,86 +119,67 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
     try {
       setLoading(true);
       
-      // Fetch all profiles
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('virtual_coins', { ascending: false });
+      // Fetch leaderboard data using secure RPC function
+      const { data: leaderboardResults, error: leaderboardError } = await supabase
+        .rpc('get_leaderboard_data');
 
-      if (error) {
-        console.error('Error fetching leaderboard data:', error);
+      if (leaderboardError) {
+        console.error('Error fetching leaderboard data:', leaderboardError);
         return;
       }
 
-      // Calculate leaderboard users with portfolio data
-      const leaderboardUsers: LeaderboardUser[] = await Promise.all(
-        (profiles || []).map(async (profile, index) => {
-          // Fetch user's portfolio
-          const { data: portfolio } = await supabase
-            .from('portfolios')
-            .select('*')
-            .eq('user_id', profile.user_id);
+      // Fetch current user's rank using secure RPC function
+      const { data: userRankData, error: userRankError } = await supabase
+        .rpc('get_user_rank', { user_uuid: user.id });
 
-          const portfolioValue = (portfolio || []).reduce(
-            (sum, stock) => sum + (stock.shares * stock.current_price), 
-            0
-          );
+      if (userRankError) {
+        console.error('Error fetching user rank:', userRankError);
+      }
 
-          const portfolioCost = (portfolio || []).reduce(
-            (sum, stock) => sum + (stock.shares * stock.buy_price), 
-            0
-          );
-
-          const totalValue = portfolioValue + profile.virtual_coins;
-          const totalCost = portfolioCost + 10000; // Starting amount
-          const returnPercentage = totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0;
-
-          return {
-            id: profile.id,
-            name: profile.display_name || 'Anonymous',
-            avatar: profile.avatar_url || '',
-            portfolioValue: totalValue,
-            totalReturn: totalValue - totalCost,
-            returnPercentage,
-            rank: index + 1,
-            group: profile.user_group || 'General',
-            activeStocks: portfolio?.length || 0,
-            weeklyReturn: 0, // Would need historical data
-          };
-        })
-      );
-
-      // Sort by total value
-      const sortedUsers = leaderboardUsers.sort((a, b) => b.portfolioValue - a.portfolioValue);
-      
-      // Update ranks
-      const globalLeaders = sortedUsers.map((user, index) => ({
-        ...user,
-        rank: index + 1,
+      // Map leaderboard results to our interface
+      const globalLeaders: LeaderboardUser[] = (leaderboardResults || []).map((entry: {
+        rank_position: number;
+        display_name: string;
+        total_portfolio_value: number;
+        total_returns: number;
+        user_group: string;
+      }) => ({
+        name: entry.display_name || 'Anonymous',
+        portfolioValue: Number(entry.total_portfolio_value) || 0,
+        returnPercentage: Number(entry.total_returns) || 0,
+        rank: Number(entry.rank_position),
+        group: entry.user_group || 'General',
       }));
+
+      setTotalPlayers(globalLeaders.length);
 
       // Filter group leaders
       const groupLeaders = globalLeaders
-        .filter(user => user.group === userGroup)
-        .map((user, index) => ({
-          ...user,
+        .filter(leader => leader.group === userGroup)
+        .map((leader, index) => ({
+          ...leader,
           rank: index + 1,
         }));
 
-      // Find current user's data
-      const currentUser = globalLeaders.find(u => u.id === user.id);
-      const userRank = currentUser?.rank || 0;
-      const userGroupRank = groupLeaders.find(u => u.id === user.id)?.rank || 0;
+      // Get current user's stats from the RPC result
+      const currentUserData = userRankData && userRankData.length > 0 ? userRankData[0] : null;
+      const userRank = currentUserData ? Number(currentUserData.user_rank) : 0;
+      const userDisplayName = currentUserData?.display_name || '';
+      
+      // Find user's group rank
+      const userGroupRank = groupLeaders.findIndex(
+        leader => leader.name === userDisplayName
+      ) + 1;
 
       setLeaderboardData({
         globalLeaders: globalLeaders.slice(0, 10),
         groupLeaders: groupLeaders.slice(0, 10),
         userRank,
-        userGroupRank,
+        userGroupRank: userGroupRank > 0 ? userGroupRank : 0,
         userStats: {
-          portfolioValue: currentUser?.portfolioValue || 0,
-          returnPercentage: currentUser?.returnPercentage || 0,
-          weeklyReturn: currentUser?.weeklyReturn || 0,
+          portfolioValue: currentUserData ? Number(currentUserData.total_portfolio_value) : 0,
+          returnPercentage: currentUserData ? Number(currentUserData.total_returns) : 0,
+          displayName: userDisplayName,
         },
       });
     } catch (error) {
@@ -242,7 +215,7 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
               {leaderboardData.userRank > 0 ? `#${leaderboardData.userRank}` : 'Unranked'}
             </div>
             <p className="text-primary-foreground/80 text-sm">
-              Out of {leaderboardData.globalLeaders.length} players
+              Out of {totalPlayers} players
             </p>
           </CardContent>
         </Card>
@@ -297,11 +270,11 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
           
           <div className="space-y-3">
             {leaderboardData.globalLeaders.length > 0 ? (
-              leaderboardData.globalLeaders.map((leader) => (
+              leaderboardData.globalLeaders.map((leader, index) => (
                 <LeaderboardCard 
-                  key={leader.id} 
+                  key={`global-${leader.rank}-${index}`} 
                   user={leader} 
-                  isCurrentUser={leader.id === user?.id} 
+                  isCurrentUser={leader.name === leaderboardData.userStats.displayName} 
                 />
               ))
             ) : (
@@ -333,11 +306,11 @@ export default function Leaderboard({ userGroup = "Beginners Club" }: Leaderboar
           
           <div className="space-y-3">
             {leaderboardData.groupLeaders.length > 0 ? (
-              leaderboardData.groupLeaders.map((leader) => (
+              leaderboardData.groupLeaders.map((leader, index) => (
                 <LeaderboardCard 
-                  key={leader.id} 
+                  key={`group-${leader.rank}-${index}`} 
                   user={leader} 
-                  isCurrentUser={leader.id === user?.id} 
+                  isCurrentUser={leader.name === leaderboardData.userStats.displayName} 
                 />
               ))
             ) : (
