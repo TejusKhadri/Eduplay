@@ -6,7 +6,7 @@ import Header from "@/components/Header";
 import StockCard from "@/components/StockCard";
 import Portfolio from "@/components/Portfolio";
 import LearningCenter from "@/components/LearningCenter";
-import Leaderboard from "@/components/Leaderboard";
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { yahooFinanceService, type Stock } from "@/services/yahooFinanceService";
 import { useAuth } from "@/hooks/useAuth";
@@ -276,11 +276,10 @@ const Index = () => {
       <Header />
       
       <Tabs defaultValue="market" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-[500px]">
+        <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
           <TabsTrigger value="market">Market</TabsTrigger>
           <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
           <TabsTrigger value="learn">Learn</TabsTrigger>
-          <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
         </TabsList>
         
         <TabsContent value="market" className="space-y-6">
@@ -347,16 +346,6 @@ const Index = () => {
           />
         </TabsContent>
         
-        <TabsContent value="leaderboard">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold mb-2">Leaderboard</h2>
-            <p className="text-muted-foreground">
-              See how you rank against other investors in the community!
-            </p>
-          </div>
-          
-          <Leaderboard />
-        </TabsContent>
       </Tabs>
     </div>
   );
